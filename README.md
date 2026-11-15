@@ -12,7 +12,7 @@ https://gist.github.com/1OF1Research/00c08569638eb94d3b3560d9abbd4e90
 
 The authors of the fix have no Apple hardware. This repository
 exists to close that gap: its GitHub Actions workflow runs the
-verification on a `macos-14` runner — Apple Silicon, the real Metal
+verification on a `macos-15` runner (Apple Silicon; macos-14 was also tried — see the run history) — Apple Silicon, the real Metal
 path — so the last step of the verification is a public,
 re-runnable log instead of a promise.
 
