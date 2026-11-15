@@ -1,0 +1,44 @@
+name: probe-torch-matrix-26
+
+# HF-005 wall retest, step 5: probe the MPS gate on the macOS 26 image.
+# Known: torch 2.8.0 initializes MPS on this runner class; 2.9.1 and
+# 2.15.0 refuse the paravirtual device. The Metal kernel that
+# transformers loads (version=1) ships variants only for torch
+# 2.10-2.14. This matrix probes each of those torch versions for
+# (a) the MPS availability flag and (b) a real MPS tensor op, so the
+# pairing question is answered by execution, not by the flag alone.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: macos-26
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        torch: ["2.10.0", "2.11.0", "2.12.0", "2.13.0", "2.14.0"]
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install torch ${{ matrix.torch }}
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install torch==${{ matrix.torch }}
+
+      - name: Probe MPS (flag + real op)
+        run: |
+          python3 - <<'PY'
+          import torch
+          print("torch:", torch.__version__)
+          print("mps built:", torch.backends.mps.is_built())
+          print("mps available:", torch.backends.mps.is_available())
+          try:
+              x = torch.ones(2, 2, device="mps")
+              print("mps op result:", float((x + x).sum().item()))
+          except Exception as e:
+              print("mps op FAILED:", type(e).__name__, str(e)[:300])
+          PY
