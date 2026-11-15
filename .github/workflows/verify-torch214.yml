@@ -1,0 +1,63 @@
+name: verify-hf005-torch214
+
+# HF-005 wall retest, step 3: the full verification inside the window
+# where BOTH gates are open.
+#   - MPS gate: the probe matrix (probe-torch-matrix.yml, run
+#     43672200354) executed a real MPS op on macos-15 under every
+#     torch from 2.10.0 to 2.14.0 — available: True, op result 8.0.
+#     (2.9.1 and 2.15.0 refuse this runner's device; 2.10-2.14 do not.)
+#   - Kernel gate: transformers loads
+#     kernels-community/mlx-quantization-metal-kernels at version=1,
+#     whose published variants span torch 2.10-2.14 (the torch 2.8.0
+#     run, 43671971605, lists them in its resolver error).
+# torch 2.14.0 is the newest version inside both windows.
+# transformers==5.23.0: its metal_quantization.py is byte-identical
+# to current main (md5 a8220e467a5cf41f8febf10b3f74cde3) — the fault
+# is present exactly as on main. All pins in ONE pip command so the
+# resolver can never drift torch out of the window.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Probe the machine
+        run: |
+          uname -a
+          sysctl -n machdep.cpu.brand_string || true
+          python3 -c "import platform; print(platform.machine(), platform.platform())"
+
+      - name: Install torch 2.14.0, kernels, transformers 5.23.0 (single resolve)
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install torch==2.14.0 kernels==0.18.3 transformers==5.23.0
+
+      - name: Probe MPS / Metal availability
+        run: |
+          python3 - <<'PY'
+          import torch
+          print("torch:", torch.__version__)
+          print("mps built:", torch.backends.mps.is_built())
+          print("mps available:", torch.backends.mps.is_available())
+          PY
+
+      - name: Run the verification (full output to verify-torch214.log)
+        run: |
+          set -o pipefail
+          python3 verify_hf005.py 2>&1 | tee verify-torch214.log
+
+      - name: Upload the full log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-torch214-log
+          path: verify-torch214.log
