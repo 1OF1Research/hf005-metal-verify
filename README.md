@@ -62,3 +62,40 @@ Metal call itself, in public, in about two minutes. The last step
 still needs a physical Mac — or a future runner image whose
 virtual device supports Metal. Re-dispatch the workflow after
 any runner-image change and it retests the wall on its own.
+
+## Update, later the same night: the wall fell
+
+The refusal above was a property of the pin (torch 2.15.0), not
+of the runners. Retested gate by gate, all in public logs:
+
+- **MPS gate** — torch 2.8.0 and 2.10.0–2.14.0 initialize MPS and
+  execute real ops on both runner images (probe matrices:
+  [macos-15](https://github.com/1OF1Research/hf005-metal-verify/actions/runs/43672200354),
+  [macos-26](https://github.com/1OF1Research/hf005-metal-verify/actions/runs/43672784801)).
+- **Kernel gate** — transformers loads the Metal kernel at
+  `version=1`, whose variants span only torch 2.10–2.14, so the
+  torch 2.8.0 run stopped in the resolver
+  ([run](https://github.com/1OF1Research/hf005-metal-verify/actions/runs/43671971605)).
+- **OS gate** — the torch 2.13/2.14 variants require macOS 26 or
+  later; the macos-15 image is 15.8.2
+  ([run](https://github.com/1OF1Research/hf005-metal-verify/actions/runs/43672522091)).
+
+The pairing where all three gates open — **macos-26 (Apple M1
+(Virtual), macOS 26.7.2) + torch 2.14.0 + kernels 0.18.3 +
+transformers 5.23.0** (its `metal_quantization.py` is
+byte-identical to `main`) — ran the verification end to end:
+[run 43672907425](https://github.com/1OF1Research/hf005-metal-verify/actions/runs/43672907425).
+
+- Probe: `mps available: True`.
+- Stage 1: **FAULT PRESENT**, both widths — 8-bit per-row errors
+  `[0.0, 5030.7, 9003.8, 10203.6]`, 4-bit `[0.0, 3337.0, 4505.9,
+  6869.9]`; the flattened call matches the per-row reference at
+  exactly 0.0.
+- Stage 2: **FIX CONFIRMED**, both widths — max abs error 0.0 on
+  every row.
+
+Honest naming: a virtualized cloud M1, not a physical Mac — but
+the Metal kernel itself executed, the fault reproduced on it,
+and the fix held. The full results file also lives in the gift
+gist (`ON-HARDWARE-RESULTS.md`). A physical-Mac run of the same
+script remains welcome as a second witness.
