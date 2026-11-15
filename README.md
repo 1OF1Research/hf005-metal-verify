@@ -36,3 +36,29 @@ full output, and uploads the complete log as the `verify-log`
 artifact. Anyone can also run `python3 verify_hf005.py` on any
 Apple Silicon Mac with torch, transformers and `kernels`
 installed.
+
+## Result of the cloud runs (2026-11-14)
+
+The door was tried, on three runner labels:
+
+- `macos-14` — the platform cancelled both dispatches within
+  seconds; no runner was ever assigned.
+- `macos-15` — ran end to end
+  ([log](https://github.com/1OF1Research/hf005-metal-verify/actions/runs/43670519020)).
+- `macos-26-arm64` — ran end to end
+  ([log](https://github.com/1OF1Research/hf005-metal-verify/actions/runs/43671084913)).
+
+On both completed runs the probe reads the same, in torch's own
+words: `mps built: True`, `mps available: False` — *"Skipping
+device Apple Paravirtual device that does not support Metal 2.0"*.
+GitHub's macOS runners are virtualized, and the paravirtual GPU
+they expose does not support Metal 2.0, so MPS — and with it the
+Metal kernel this verification exists to run — cannot start
+inside them. The script prints its plain message and stops, as
+designed.
+
+So the workflow stands ready and proves everything up to the
+Metal call itself, in public, in about two minutes. The last step
+still needs a physical Mac — or a future runner image whose
+virtual device supports Metal. Re-dispatch the workflow after
+any runner-image change and it retests the wall on its own.
