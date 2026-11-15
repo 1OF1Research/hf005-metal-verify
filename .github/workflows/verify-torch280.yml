@@ -1,0 +1,64 @@
+name: verify-hf005-torch280
+
+# Retest of the HF-005 wall under the pin HF-003's evidence demands.
+# The first cloud runs (verify.yml) used torch 2.15.0, whose MPS probe
+# refuses the macOS runner's paravirtual GPU ("does not support
+# Metal 2.0"), so the script stopped before the Metal call. HF-003
+# proved that refusal is torch-version-bound: torch 2.8.0 initializes
+# MPS on the same runner class. This workflow pins the stack inside
+# the bug's window:
+#   torch==2.8.0        (initializes MPS on the runner; the kernel
+#                        repo publishes a torch28-metal variant)
+#   kernels==0.18.3     (same loader as the first runs; the kernels
+#                        package carries no torch pin of its own)
+#   transformers==5.23.0 (its metal_quantization.py is byte-identical
+#                        to current main, md5 a8220e467a5cf41f8febf10b3f74cde3
+#                        — the fault is present, exactly as on main)
+# All three pins go to pip in ONE command so the resolver can never
+# silently upgrade torch out of the window.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Probe the machine
+        run: |
+          uname -a
+          sysctl -n machdep.cpu.brand_string || true
+          python3 -c "import platform; print(platform.machine(), platform.platform())"
+
+      - name: Install torch 2.8.0, kernels, transformers 5.23.0 (single resolve)
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install torch==2.8.0 kernels==0.18.3 transformers==5.23.0
+
+      - name: Probe MPS / Metal availability
+        run: |
+          python3 - <<'PY'
+          import torch
+          print("torch:", torch.__version__)
+          print("mps built:", torch.backends.mps.is_built())
+          print("mps available:", torch.backends.mps.is_available())
+          PY
+
+      - name: Run the verification (full output to verify-torch280.log)
+        run: |
+          set -o pipefail
+          python3 verify_hf005.py 2>&1 | tee verify-torch280.log
+
+      - name: Upload the full log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-torch280-log
+          path: verify-torch280.log
