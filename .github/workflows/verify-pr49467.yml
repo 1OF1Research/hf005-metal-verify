@@ -40,6 +40,40 @@ jobs:
           print("mps available:", torch.backends.mps.is_available())
           PY
 
+      - name: Diagnose the transformers kernel-load path (exact lazy call, full traceback)
+        run: |
+          python3 - <<'PY' || true
+          import logging, traceback
+          logging.basicConfig(level=logging.INFO)
+          import torch
+          print("torch:", torch.__version__)
+          # 1) The exact call transformers' lazy_load_kernel makes for this PR.
+          try:
+              from transformers.integrations.hub_kernels import get_kernel as tf_get_kernel
+              k = tf_get_kernel("kernels-community/mlx-quantization-metal-kernels", version=2, allow_all_kernels=False)
+              print("transformers get_kernel v2 OK:", sorted(n for n in dir(k) if not n.startswith("_"))[:25])
+          except Exception:
+              print("transformers get_kernel v2 FAILED:")
+              traceback.print_exc()
+          # 2) The lazy path itself, as MetalLinear.forward invokes it.
+          try:
+              from transformers.integrations.hub_kernels import lazy_load_kernel
+              m = lazy_load_kernel("mlx-quantization")
+              print("lazy_load_kernel ->", "None (load failed, exception swallowed)" if m is None else "module loaded")
+          except Exception:
+              print("lazy_load_kernel RAISED:")
+              traceback.print_exc()
+          # 3) Variant inventory against this environment, with rejection reasons.
+          try:
+              from kernels import get_kernel_variants, VariantAccepted
+              for d in get_kernel_variants("kernels-community/mlx-quantization-metal-kernels", version=2):
+                  v = d.variant.variant_str
+                  print("variant", v, "->", "ACCEPTED" if isinstance(d, VariantAccepted) else f"rejected ({d.reason})")
+          except Exception:
+              print("variant inventory FAILED:")
+              traceback.print_exc()
+          PY
+
       - name: Run the PR check (full output to verify-pr49467.log)
         run: |
           set -o pipefail
