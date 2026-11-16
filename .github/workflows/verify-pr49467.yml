@@ -2,10 +2,15 @@ name: verify-pr49467
 
 # Independent on-hardware test of transformers PR #49467 ("Update
 # metal quant kernels", the maintainer's kernel-side fix for #49337):
-# same pairing as verify-torch214-26.yml (macos-26 + torch 2.10.0 +
-# kernels 0.18.3, the one window where MPS, the kernel variants and
-# the OS floor all open), but transformers is installed from the PR
-# branch and the check applies no transformers-side fix of its own.
+# Pairing: macos-26 + torch 2.10.0 + kernels 0.17.2. The kernels pin
+# is the PR branch's own window — its transformers requires
+# 0.17.2 <= kernels < 0.18.0 and refuses 0.18.x in
+# is_kernels_available(), which makes lazy_load_kernel return None
+# and MetalLinear raise ImportError (measured in run 43810053813,
+# whose variant inventory also shows the v2 kernel's torch210-metal
+# variant ACCEPTED under torch 2.10.0). Transformers is installed
+# from the PR branch and the check applies no transformers-side
+# fix of its own.
 
 on:
   workflow_dispatch:
@@ -26,10 +31,10 @@ jobs:
           uname -a
           sysctl -n machdep.cpu.brand_string || true
 
-      - name: Install torch 2.10.0, kernels, transformers from PR #49467 branch (single resolve)
+      - name: Install torch 2.10.0, kernels 0.17.2, transformers from PR #49467 branch (single resolve)
         run: |
           python3 -m pip install --upgrade pip
-          python3 -m pip install torch==2.10.0 kernels==0.18.3 "transformers @ git+https://github.com/huggingface/transformers@fix-metal-linear-nd-input"
+          python3 -m pip install torch==2.10.0 kernels==0.17.2 "transformers @ git+https://github.com/huggingface/transformers@fix-metal-linear-nd-input"
 
       - name: Probe MPS / Metal availability
         run: |
