@@ -1,0 +1,53 @@
+name: verify-pr49467
+
+# Independent on-hardware test of transformers PR #49467 ("Update
+# metal quant kernels", the maintainer's kernel-side fix for #49337):
+# same pairing as verify-torch214-26.yml (macos-26 + torch 2.14.0 +
+# kernels 0.18.3, the one window where MPS, the kernel variants and
+# the OS floor all open), but transformers is installed from the PR
+# branch and the check applies no transformers-side fix of its own.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  verify-pr:
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Probe the machine
+        run: |
+          uname -a
+          sysctl -n machdep.cpu.brand_string || true
+
+      - name: Install torch 2.14.0, kernels, transformers from PR #49467 branch (single resolve)
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install torch==2.14.0 kernels==0.18.3 "transformers @ git+https://github.com/huggingface/transformers@fix-metal-linear-nd-input"
+
+      - name: Probe MPS / Metal availability
+        run: |
+          python3 - <<'PY'
+          import torch
+          print("torch:", torch.__version__)
+          print("mps built:", torch.backends.mps.is_built())
+          print("mps available:", torch.backends.mps.is_available())
+          PY
+
+      - name: Run the PR check (full output to verify-pr49467.log)
+        run: |
+          set -o pipefail
+          python3 verify_pr49467.py 2>&1 | tee verify-pr49467.log
+
+      - name: Upload the full log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-pr49467-log
+          path: verify-pr49467.log
